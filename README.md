@@ -1,203 +1,210 @@
 # IP Lookup & Reputation Checker
 
-Un servizio web completo in Go per cercare informazioni su indirizzi IP e verificare la loro reputazione utilizzando VirusTotal e AbuseIPDB.
+A lightweight, single-binary web service built with Go that provides IP address information and reputation checking. It integrates with VirusTotal and AbuseIPDB APIs to deliver comprehensive IP intelligence.
 
-## 🎯 Funzionalità
+## 🎯 Features
 
-- **Informazioni IP**: ISP, ASN, Domain Name, Country, City, Usage Type
-- **Reputazione**: Controllo tramite VirusTotal e AbuseIPDB
-- **Cache in memoria**: Risultati cachati per 30 minuti per migliorare le performance
-- **Interfaccia moderna**: Bootstrap 5 con tema dark, completamente responsive
-- **API RESTful**: Endpoint `/lookup?ip=...` per integrazioni
+- **IP Information Lookup**: ISP, ASN, Domain Name, Country, City, Usage Type
+- **Reputation Checking**: Check IP reputation via VirusTotal and AbuseIPDB APIs
+- **Copy-Paste Ready Output**: Formatted text output optimized for easy copying
+- **Single Binary**: No external dependencies, just the Go standard library
+- **In-Memory Cache**: 30-minute TTL cache for improved performance
+- **Modern Web UI**: Clean, dark-themed interface with one-click copy functionality
+- **RESTful API**: Simple HTTP endpoint for easy integration
 
-## 📋 Requisiti
+## 📋 Requirements
 
 - Go >= 1.21
-- Chiavi API (opzionali ma consigliate):
-  - VirusTotal API Key: [Ottieni qui](https://www.virustotal.com/gui/join-us)
-  - AbuseIPDB API Key: [Ottieni qui](https://www.abuseipdb.com/pricing)
+- API Keys (optional but recommended):
+  - VirusTotal API Key: [Get it here](https://www.virustotal.com/gui/join-us)
+  - AbuseIPDB API Key: [Get it here](https://www.abuseipdb.com/pricing)
 
-## 🚀 Setup Locale
+## 🚀 Local Setup
 
-### 1. Clona o scarica il progetto
+### 1. Clone or download the project
 
 ```bash
 cd whois_reputation
 ```
 
-### 2. Installa le dipendenze
+### 2. Install dependencies
 
 ```bash
 go mod tidy
 ```
 
-### 3. Configura le variabili d'ambiente
+### 3. Configure environment variables
 
-**Opzione A: Usa un file `.env` (consigliato per sviluppo locale)**
+**Option A: Use a `.env` file (recommended for local development)**
 
-Crea un file `.env` nella root del progetto:
+Create a `.env` file in the project root:
 
 ```bash
 VT_API_KEY=your_virustotal_api_key
 ABUSE_API_KEY=your_abuseipdb_api_key
 ```
 
-Il server caricherà automaticamente le variabili dal file `.env` all'avvio.
+The server will automatically load variables from the `.env` file on startup.
 
-**Opzione B: Esporta le variabili d'ambiente**
+**Option B: Export environment variables**
 
 ```bash
 export VT_API_KEY="your_virustotal_api_key"
 export ABUSE_API_KEY="your_abuseipdb_api_key"
 ```
 
-**Nota**: 
-- Le chiavi API sono opzionali. Se non configurate, il servizio funzionerà comunque ma senza dati di reputazione da VirusTotal e AbuseIPDB.
-- Le variabili d'ambiente del sistema hanno sempre priorità rispetto al file `.env`.
-- Il file `.env` è già incluso nel `.gitignore`, quindi non verrà committato nel repository.
+**Note**: 
+- API keys are optional. If not configured, the service will still work but without reputation data from VirusTotal and AbuseIPDB.
+- System environment variables always take priority over the `.env` file.
+- The `.env` file is already included in `.gitignore`, so it won't be committed to the repository.
 
-### 4. Avvia il server
+### 4. Start the server
 
 ```bash
 go run main.go
 ```
 
-Il server sarà disponibile su `http://localhost:8080`
+The server will be available at `http://localhost:8080`
 
 ## 🌐 Deployment
 
 ### Render.com
 
-1. Crea un nuovo account su [Render](https://render.com)
-2. Crea un nuovo "Web Service"
-3. Connetti il tuo repository Git
-4. Configurazione:
+1. Create a new account on [Render](https://render.com)
+2. Create a new "Web Service"
+3. Connect your Git repository
+4. Configuration:
    - **Build Command**: `go build -o server`
    - **Start Command**: `./server`
    - **Environment Variables**:
-     - `VT_API_KEY`: la tua chiave VirusTotal
-     - `ABUSE_API_KEY`: la tua chiave AbuseIPDB
-     - `PORT`: Render imposterà automaticamente questa variabile
+     - `VT_API_KEY`: your VirusTotal key
+     - `ABUSE_API_KEY`: your AbuseIPDB key
+     - `PORT`: Render will automatically set this variable
 5. Deploy!
 
 ### Railway
 
-1. Crea un account su [Railway](https://railway.app)
-2. Crea un nuovo progetto e connetti il repository
-3. Railway rileverà automaticamente che è un progetto Go
-4. Aggiungi le variabili d'ambiente:
+1. Create an account on [Railway](https://railway.app)
+2. Create a new project and connect the repository
+3. Railway will automatically detect that it's a Go project
+4. Add environment variables:
    - `VT_API_KEY`
    - `ABUSE_API_KEY`
 5. Deploy!
 
 ### Vercel
 
-**Nota**: Vercel è ottimizzato per progetti serverless. Per questo progetto, Render o Railway sono più adatti. Se vuoi usare Vercel, potresti dover adattare il codice per un ambiente serverless.
+**Note**: Vercel is optimized for serverless projects. For this project, Render or Railway are more suitable. If you want to use Vercel, you might need to adapt the code for a serverless environment.
 
-1. Installa Vercel CLI: `npm i -g vercel`
-2. Nel progetto, esegui: `vercel`
-3. Segui le istruzioni e configura le variabili d'ambiente
+1. Install Vercel CLI: `npm i -g vercel`
+2. In the project, run: `vercel`
+3. Follow the instructions and configure environment variables
 
-## 📁 Struttura del Progetto
+## 📁 Project Structure
 
 ```
 whois_reputation/
-├── main.go              # Server Go principale
+├── main.go              # Main Go server
 ├── templates/
-│   └── index.html       # Template HTML frontend
+│   └── index.html       # HTML frontend template
 ├── static/
-│   └── style.css        # Stili CSS personalizzati
-├── go.mod               # Modulo Go
-├── go.sum               # Dipendenze (generato automaticamente)
-├── Procfile             # Configurazione per Render/Railway
-└── README.md            # Questo file
+│   └── style.css        # Custom CSS styles
+├── go.mod               # Go module
+├── go.sum               # Dependencies (auto-generated)
+├── Procfile             # Configuration for Render/Railway
+└── README.md            # This file
 ```
 
 ## 🔌 API Endpoint
 
 ### GET /lookup?ip=<ip_address>
 
-Cerca informazioni su un indirizzo IP.
+Search for information on an IP address.
 
-**Parametri**:
-- `ip` (required): Indirizzo IP da cercare (es. `8.8.8.8`)
+**Parameters**:
+- `ip` (required): IP address to search for (e.g. `8.8.8.8`)
 
-**Risposta** (JSON):
-```json
-{
-  "ip": "8.8.8.8",
-  "isp": "Google LLC",
-  "usage_type": "Hosting",
-  "asn": "AS15169",
-  "domain_name": "dns.google",
-  "country": "United States",
-  "country_code": "US",
-  "city": "Mountain View",
-  "region": "California",
-  "virustotal": {
-    "malicious": 0,
-    "total": 92,
-    "status": "ok"
-  },
-  "abuseipdb": {
-    "abuse_confidence": 0,
-    "status": "ok"
-  }
-}
+**Response** (Plain Text):
+```
+WHOIS & REPUTATION:
+
+
+
+IP: 8.8.8.8
+
+WHOIS
+
+ISP Google LLC
+
+Usage Type Hosting
+
+ASN AS15169
+
+Domain Name dns.google
+
+Country 🇺🇸 United States
+
+City Mountain View, California
+
+REPUTATION:
+
+Virutotal: 0/92
+
+Abuseipdb:0%
 ```
 
-**Codici di stato**:
-- `200`: Successo
-- `400`: IP non valido o parametro mancante
-- `500`: Errore interno del server
+**Status Codes**:
+- `200`: Success
+- `400`: Invalid IP or missing parameter
+- `500`: Internal server error
 
-## 🛠️ Sviluppo
+## 🛠️ Development
 
-### Eseguire i test
+### Run tests
 
 ```bash
 go test ./...
 ```
 
-### Build del binario
+### Build binary
 
 ```bash
 go build -o server main.go
 ```
 
-### Eseguire il binario
+### Run binary
 
 ```bash
 ./server
 ```
 
-## 📝 Note
+## 📝 Notes
 
-- La cache in memoria mantiene i risultati per 30 minuti
-- Se una chiamata API fallisce, il servizio restituisce comunque i dati disponibili
-- Le chiavi API non sono obbligatorie ma fortemente consigliate per dati completi
-- Il servizio è completamente stateless (eccetto la cache in memoria)
+- In-memory cache keeps results for 30 minutes
+- If an API call fails, the service still returns available data
+- API keys are not required but strongly recommended for complete data
+- The service is completely stateless (except for in-memory cache)
 
-## 🔒 Sicurezza
+## 🔒 Security
 
-- **NON** committare le chiavi API nel repository
-- Usa variabili d'ambiente per le chiavi sensibili
-- Il servizio valida gli indirizzi IP prima di processarli
-- Considera di aggiungere rate limiting per produzione
+- **DO NOT** commit API keys to the repository
+- Use environment variables for sensitive keys
+- The service validates IP addresses before processing them
+- Consider adding rate limiting for production
 
-## 📄 Licenza
+## 📄 License
 
-Questo progetto è rilasciato sotto licenza MIT. Sentiti libero di usarlo e modificarlo come preferisci.
+This project is released under the MIT License. Feel free to use and modify as needed.
 
-## 🤝 Contributi
+## 🤝 Contributing
 
-I contributi sono benvenuti! Apri una issue o una pull request se vuoi migliorare il progetto.
+Contributions are welcome! Open an issue or a pull request if you want to improve the project.
 
-## 📞 Supporto
+## 📞 Support
 
-Per problemi o domande, apri una issue sul repository.
+For issues or questions, open an issue on the repository.
 
 ---
 
-**Sviluppato con ❤️ in Go**
+**Built with ❤️ in Go**
 
