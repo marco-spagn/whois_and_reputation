@@ -1,0 +1,115 @@
+/* Stili personalizzati per il tema dark */
+
+body {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.card {
+    border: 1px solid #495057;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+}
+
+.card-header {
+    border-bottom: 1px solid #495057;
+}
+
+.input-group-text {
+    border-right: none;
+}
+
+.form-control:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    background-color: #212529;
+    color: #fff;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+    border: none;
+    transition: all 0.3s;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #0a58ca 0%, #084298 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(13, 110, 253, 0.3);
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.spinner-border {
+    width: 3rem;
+    height: 3rem;
+}
+
+.badge {
+    font-size: 0.75rem;
+    padding: 0.35em 0.65em;
+}
+
+/* Animazione per il caricamento */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+#results {
+    animation: fadeIn 0.5s ease-in;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .display-4 {
+        font-size: 2rem;
+    }
+    
+    .input-group-lg {
+        flex-direction: column;
+    }
+    
+    .input-group-lg .form-control {
+        border-radius: 0.375rem 0.375rem 0 0 !important;
+    }
+    
+    .input-group-lg .btn {
+        border-radius: 0 0 0.375rem 0.375rem !important;
+        width: 100%;
+    }
+}
+
+/* Stili per le card dei risultati */
+.card-body strong {
+    color: #adb5bd;
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.card-body p {
+    color: #fff;
+    font-size: 1.1rem;
+}
+
+/* Miglioramenti per accessibilità */
+:focus {
+    outline: 2px solid #0d6efd;
+    outline-offset: 2px;
+}
+
