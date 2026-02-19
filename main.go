@@ -583,7 +583,9 @@ func loadEnvFile(filename string) error {
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
+	lineNum := 0
 	for scanner.Scan() {
+		lineNum++
 		line := strings.TrimSpace(scanner.Text())
 
 		// Ignora commenti e righe vuote
@@ -591,26 +593,51 @@ func loadEnvFile(filename string) error {
 			continue
 		}
 
-		// Separa chiave e valore (formato: KEY=value)
+		// Separa chiave e valore (formato: KEY=value o KEY = value)
 		parts := strings.SplitN(line, "=", 2)
 		if len(parts) != 2 {
+			log.Printf(".env riga %d: formato non valido (nessun = trovato): %s", lineNum, line)
 			continue
 		}
 
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
 
-		// Rimuovi le virgolette se presenti
+		// Rimuovi le virgolette se presenti (singole o doppie, all'inizio e alla fine)
 		value = strings.Trim(value, `"'`)
+
+		// Verifica che key e value non siano vuoti
+		if key == "" {
+			log.Printf(".env riga %d: chiave vuota", lineNum)
+			continue
+		}
+		if value == "" {
+			log.Printf(".env riga %d: valore vuoto per chiave %s", lineNum, key)
+			continue
+		}
 
 		// Imposta la variabile d'ambiente solo se non è già impostata
 		// (le env vars del sistema hanno priorità)
 		if os.Getenv(key) == "" {
 			os.Setenv(key, value)
+			log.Printf("Caricata variabile d'ambiente da .env: %s (valore: %s...)", key, value[:min(10, len(value))])
+		} else {
+			log.Printf("Variabile %s già presente nel sistema, ignorata da .env", key)
 		}
 	}
 
-	return scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("errore nella lettura del file .env: %w", err)
+	}
+	return nil
+}
+
+// min restituisce il minimo tra due interi
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // getEnv legge una variabile d'ambiente con fallback
@@ -637,6 +664,13 @@ func lookupIP(ip string) IPLookupResult {
 	vtKey := os.Getenv("VT_API_KEY")
 	abuseKey := os.Getenv("ABUSE_API_KEY")
 	iplocateKey := os.Getenv("IPLOCATE_API_KEY")
+	
+	// Debug: verifica se IPLOCATE_API_KEY è caricata
+	if iplocateKey == "" {
+		log.Printf("IPLOCATE_API_KEY non trovata nelle variabili d'ambiente")
+	} else {
+		log.Printf("IPLOCATE_API_KEY trovata (lunghezza: %d)", len(iplocateKey))
+	}
 
 	result := IPLookupResult{IP: ip}
 
@@ -880,6 +914,14 @@ func main() {
 		log.Printf("Password protection enabled")
 	} else {
 		log.Printf("Password protection disabled (SITE_PASSWORD not set)")
+	}
+
+	// Verifica le API keys caricate
+	iplocateKey := getEnv("IPLOCATE_API_KEY", "")
+	if iplocateKey != "" {
+		log.Printf("IPLOCATE_API_KEY caricata correttamente (lunghezza: %d)", len(iplocateKey))
+	} else {
+		log.Printf("IPLOCATE_API_KEY non configurata")
 	}
 
 	// Determina la porta (default 8080, usa PORT per deploy)
