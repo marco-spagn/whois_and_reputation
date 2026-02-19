@@ -4,7 +4,7 @@ A lightweight, single-binary web service built with Go that provides IP address 
 
 ## 🎯 Features
 
-- **IP Information Lookup**: ISP, ASN, Domain Name, Country, City, Usage Type
+- **IP Information Lookup**: ISP, ASN, Country, City, Usage Type (via [ip-api.com](https://ip-api.com/) - free, no API key)
 - **Reputation Checking**: Check IP reputation via VirusTotal and AbuseIPDB APIs
 - **Copy-Paste Ready Output**: Formatted text output optimized for easy copying
 - **Single Binary**: No external dependencies, just the Go standard library
@@ -42,6 +42,7 @@ Create a `.env` file in the project root:
 ```bash
 VT_API_KEY=your_virustotal_api_key
 ABUSE_API_KEY=your_abuseipdb_api_key
+SITE_PASSWORD=your_site_password
 ```
 
 The server will automatically load variables from the `.env` file on startup.
@@ -51,10 +52,12 @@ The server will automatically load variables from the `.env` file on startup.
 ```bash
 export VT_API_KEY="your_virustotal_api_key"
 export ABUSE_API_KEY="your_abuseipdb_api_key"
+export SITE_PASSWORD="your_site_password"
 ```
 
 **Note**: 
 - API keys are optional. If not configured, the service will still work but without reputation data from VirusTotal and AbuseIPDB.
+- **SITE_PASSWORD**: Optional. If set, the site will be protected with password authentication. If not set, the site will be publicly accessible.
 - System environment variables always take priority over the `.env` file.
 - The `.env` file is already included in `.gitignore`, so it won't be committed to the repository.
 
@@ -77,8 +80,9 @@ The server will be available at `http://localhost:8080`
    - **Build Command**: `go build -o server`
    - **Start Command**: `./server`
    - **Environment Variables**:
-     - `VT_API_KEY`: your VirusTotal key
-     - `ABUSE_API_KEY`: your AbuseIPDB key
+     - `VT_API_KEY`: your VirusTotal key (optional)
+     - `ABUSE_API_KEY`: your AbuseIPDB key (optional)
+     - `SITE_PASSWORD`: password to protect the site (optional)
      - `PORT`: Render will automatically set this variable
 5. Deploy!
 
@@ -90,6 +94,7 @@ The server will be available at `http://localhost:8080`
 4. Add environment variables:
    - `VT_API_KEY`
    - `ABUSE_API_KEY`
+   - `SITE_PASSWORD` (optional)
 5. Deploy!
 
 ### Vercel
@@ -178,12 +183,23 @@ go build -o server main.go
 ./server
 ```
 
+## 🔐 Password Protection
+
+The service supports optional password protection via the `SITE_PASSWORD` environment variable:
+
+- If `SITE_PASSWORD` is set, users will be required to log in before accessing the site
+- Sessions are valid for 24 hours
+- Cookies are HttpOnly and use SameSite=Strict for security
+- If `SITE_PASSWORD` is not set, the site is publicly accessible (no authentication required)
+
 ## 📝 Notes
 
+- **Geolocation data** is provided by [ip-api.com](https://ip-api.com/) (free tier: 45 requests/minute, no API key required). Domain Name is not available in the free tier.
 - In-memory cache keeps results for 30 minutes
 - If an API call fails, the service still returns available data
 - API keys are not required but strongly recommended for complete data
-- The service is completely stateless (except for in-memory cache)
+- The service is completely stateless (except for in-memory cache and session tokens)
+- Password protection is optional and can be enabled by setting the `SITE_PASSWORD` environment variable
 
 ## 🔒 Security
 

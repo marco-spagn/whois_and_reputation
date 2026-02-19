@@ -2,6 +2,9 @@ package main
 
 import (
 	"bufio"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -49,6 +52,17 @@ var (
 	cache      = make(map[string]CacheEntry)
 	cacheMutex sync.RWMutex
 	cacheTTL   = 30 * time.Minute // Time-to-live della cache
+	
+	// Sessioni autenticate (in produzione usa una soluzione più robusta)
+	authenticatedSessions = make(map[string]time.Time)
+	sessionMutex          sync.RWMutex
+	sessionTTL            = 24 * time.Hour // Sessione valida per 24 ore
+	sitePassword          = ""             // Password del sito (da variabile d'ambiente)
+)
+
+const (
+	sessionCookieName = "ip_lookup_session"
+	sessionTokenLength = 32
 )
 
 // validateIP verifica se una stringa è un indirizzo IP valido
@@ -56,50 +70,255 @@ func validateIP(ip string) bool {
 	return net.ParseIP(ip) != nil
 }
 
-// fetchIPAPI interroga ipapi.co per ottenere informazioni geografiche e ISP
+// generateSessionToken genera un token di sessione casuale
+func generateSessionToken() (string, error) {
+	bytes := make([]byte, sessionTokenLength)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(bytes), nil
+}
+
+// isValidSession verifica se un token di sessione è valido
+func isValidSession(token string) bool {
+	sessionMutex.RLock()
+	defer sessionMutex.RUnlock()
+	
+	expires, exists := authenticatedSessions[token]
+	if !exists {
+		return false
+	}
+	
+	// Rimuovi sessioni scadute
+	if time.Now().After(expires) {
+		sessionMutex.RUnlock()
+		sessionMutex.Lock()
+		delete(authenticatedSessions, token)
+		sessionMutex.Unlock()
+		sessionMutex.RLock()
+		return false
+	}
+	
+	return true
+}
+
+// createSession crea una nuova sessione e restituisce il token
+func createSession() (string, error) {
+	token, err := generateSessionToken()
+	if err != nil {
+		return "", err
+	}
+	
+	sessionMutex.Lock()
+	authenticatedSessions[token] = time.Now().Add(sessionTTL)
+	sessionMutex.Unlock()
+	
+	return token, nil
+}
+
+// clearSession rimuove una sessione
+func clearSession(token string) {
+	sessionMutex.Lock()
+	delete(authenticatedSessions, token)
+	sessionMutex.Unlock()
+}
+
+// isAuthenticated verifica se la richiesta è autenticata
+func isAuthenticated(r *http.Request) bool {
+	// Se la password non è configurata, non richiedere autenticazione
+	if sitePassword == "" {
+		return true
+	}
+	
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil {
+		return false
+	}
+	
+	return isValidSession(cookie.Value)
+}
+
+// requireAuth è un middleware che richiede l'autenticazione
+func requireAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Se la password non è configurata, procedi senza autenticazione
+		if sitePassword == "" {
+			next(w, r)
+			return
+		}
+		
+		if !isAuthenticated(r) {
+			// Reindirizza al login per richieste GET alla root
+			if r.URL.Path == "/" && r.Method == "GET" {
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				return
+			}
+			// Per altre richieste, restituisci 401
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		
+		next(w, r)
+	}
+}
+
+// handleLogin gestisce il login
+func handleLogin(w http.ResponseWriter, r *http.Request) {
+	// Se la password non è configurata, reindirizza alla home
+	if sitePassword == "" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	
+	if r.Method == "GET" {
+		// Mostra il form di login
+		tmpl, err := template.ParseFiles("templates/login.html")
+		if err != nil {
+			http.Error(w, "Error loading login template", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		tmpl.Execute(w, nil)
+		return
+	}
+	
+	if r.Method == "POST" {
+		// Processa il login
+		password := r.FormValue("password")
+		
+		// Usa constant-time comparison per sicurezza
+		if subtle.ConstantTimeCompare([]byte(password), []byte(sitePassword)) == 1 {
+			// Password corretta, crea sessione
+			token, err := createSession()
+			if err != nil {
+				http.Error(w, "Error creating session", http.StatusInternalServerError)
+				return
+			}
+			
+			// Imposta il cookie
+			cookie := http.Cookie{
+				Name:     sessionCookieName,
+				Value:    token,
+				Path:     "/",
+				MaxAge:   int(sessionTTL.Seconds()),
+				HttpOnly: true,
+				SameSite: http.SameSiteStrictMode,
+				Secure:   false, // Imposta a true se usi HTTPS
+			}
+			http.SetCookie(w, &cookie)
+			
+			// Reindirizza alla home
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+		
+		// Password errata
+		tmpl, err := template.ParseFiles("templates/login.html")
+		if err != nil {
+			http.Error(w, "Error loading login template", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		tmpl.Execute(w, map[string]string{"Error": "Invalid password"})
+		return
+	}
+	
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+// handleLogout gestisce il logout
+func handleLogout(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err == nil {
+		clearSession(cookie.Value)
+	}
+	
+	// Rimuovi il cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+	})
+	
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+// fetchIPAPI interroga ip-api.com per ottenere informazioni geografiche e ISP
+// API gratuita, senza chiave: https://ip-api.com/
 func fetchIPAPI(ip string) (IPLookupResult, error) {
 	result := IPLookupResult{IP: ip}
 
-	url := fmt.Sprintf("https://ipapi.co/%s/json/", ip)
-	resp, err := http.Get(url)
+	// fields: solo i campi necessari per ridurre il payload
+	fields := "status,message,country,countryCode,region,regionName,city,isp,org,as,mobile,proxy,hosting,query"
+	apiURL := fmt.Sprintf("http://ip-api.com/json/%s?fields=%s", ip, fields)
+	resp, err := http.Get(apiURL)
 	if err != nil {
-		return result, fmt.Errorf("errore nella richiesta a ipapi.co: %w", err)
+		return result, fmt.Errorf("errore nella richiesta a ip-api.com: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return result, fmt.Errorf("ipapi.co ha restituito status %d", resp.StatusCode)
+		return result, fmt.Errorf("ip-api.com ha restituito status %d", resp.StatusCode)
 	}
 
 	var data struct {
-		ISP         string `json:"org"`
-		ASN         string `json:"asn"`
-		DomainName  string `json:"hostname"`
-		Country     string `json:"country_name"`
-		CountryCode string `json:"country_code"`
-		City        string `json:"city"`
-		Region      string `json:"region"`
-		UsageType   string `json:"type"`
-		Error       bool   `json:"error"`
-		Reason      string `json:"reason"`
+		Status     string `json:"status"`
+		Message    string `json:"message"`
+		Country    string `json:"country"`
+		CountryCode string `json:"countryCode"`
+		Region     string `json:"region"`
+		RegionName string `json:"regionName"`
+		City       string `json:"city"`
+		ISP        string `json:"isp"`
+		Org        string `json:"org"`
+		AS         string `json:"as"`
+		Mobile     bool   `json:"mobile"`
+		Proxy      bool   `json:"proxy"`
+		Hosting    bool   `json:"hosting"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		return result, fmt.Errorf("errore nel parsing della risposta: %w", err)
 	}
 
-	if data.Error {
-		return result, fmt.Errorf("ipapi.co error: %s", data.Reason)
+	if data.Status != "success" {
+		return result, fmt.Errorf("ip-api.com error: %s", data.Message)
 	}
 
 	result.ISP = data.ISP
-	result.ASN = data.ASN
-	result.DomainName = data.DomainName
+	if result.ISP == "" {
+		result.ISP = data.Org
+	}
+	// AS è nel formato "AS15169 Google LLC" - estrai solo "AS15169"
+	if idx := strings.Index(data.AS, " "); idx > 0 {
+		result.ASN = data.AS[:idx]
+	} else {
+		result.ASN = data.AS
+	}
 	result.Country = data.Country
 	result.CountryCode = data.CountryCode
 	result.City = data.City
-	result.Region = data.Region
-	result.UsageType = data.UsageType
+	result.Region = data.RegionName
+	if result.Region == "" {
+		result.Region = data.Region
+	}
+
+	// Usage Type derivato da mobile, proxy, hosting
+	switch {
+	case data.Hosting:
+		result.UsageType = "Data Center/Web Hosting"
+	case data.Proxy:
+		result.UsageType = "Proxy/VPN"
+	case data.Mobile:
+		result.UsageType = "Mobile"
+	default:
+		result.UsageType = "Fixed Line ISP"
+	}
+
+	// ip-api.com non fornisce hostname nel piano free, lasciamo vuoto
+	result.DomainName = ""
 
 	return result, nil
 }
@@ -336,7 +555,7 @@ func lookupIP(ip string) IPLookupResult {
 
 	result := IPLookupResult{IP: ip}
 
-	// Fetch dati da ipapi.co
+	// Fetch dati da ip-api.com
 	ipapiResult, err := fetchIPAPI(ip)
 	if err != nil {
 		result.Error = fmt.Sprintf("Errore nel recupero dati IP: %v", err)
@@ -458,14 +677,14 @@ func getCountryFlagEmoji(countryCode string) string {
 func handleIndex(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("templates/index.html")
 	if err != nil {
-		http.Error(w, "Errore nel caricamento del template", http.StatusInternalServerError)
+		http.Error(w, "Error loading template", http.StatusInternalServerError)
 		log.Printf("Errore template: %v", err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, nil); err != nil {
-		http.Error(w, "Errore nell'esecuzione del template", http.StatusInternalServerError)
+		http.Error(w, "Error executing template", http.StatusInternalServerError)
 		log.Printf("Errore esecuzione template: %v", err)
 	}
 }
@@ -504,15 +723,49 @@ func main() {
 		log.Printf("Attenzione: errore nel caricamento del file .env: %v", err)
 	}
 
+	// Carica la password del sito
+	sitePassword = getEnv("SITE_PASSWORD", "")
+	if sitePassword != "" {
+		log.Printf("Password protection enabled")
+	} else {
+		log.Printf("Password protection disabled (SITE_PASSWORD not set)")
+	}
+
 	// Determina la porta (default 8080, usa PORT per deploy)
 	port := getEnv("PORT", "8080")
 
 	// Route handler
-	http.HandleFunc("/", handleIndex)      // Pagina HTML con form
-	http.HandleFunc("/lookup", handleLookup) // Endpoint API per la lookup
+	// Login e logout non protetti
+	http.HandleFunc("/login", handleLogin)
+	http.HandleFunc("/logout", handleLogout)
+	
+	// Route protette
+	http.HandleFunc("/", requireAuth(handleIndex))      // Pagina HTML con form
+	http.HandleFunc("/lookup", requireAuth(handleLookup)) // Endpoint API per la lookup
+
+	// Avvia goroutine per pulire sessioni scadute
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			sessionMutex.Lock()
+			now := time.Now()
+			for token, expires := range authenticatedSessions {
+				if now.After(expires) {
+					delete(authenticatedSessions, token)
+				}
+			}
+			sessionMutex.Unlock()
+		}
+	}()
 
 	log.Printf("Server avviato sulla porta %s", port)
-	log.Printf("Apri http://localhost:%s nel browser", port)
+	if sitePassword != "" {
+		log.Printf("Password protection: ENABLED")
+		log.Printf("Apri http://localhost:%s/login per accedere", port)
+	} else {
+		log.Printf("Apri http://localhost:%s nel browser", port)
+	}
 
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatalf("Errore nel server: %v", err)

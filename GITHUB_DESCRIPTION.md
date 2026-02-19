@@ -23,7 +23,7 @@
 
 - **Backend**: Go (>=1.21) with standard library only
 - **Frontend**: HTML, CSS, JavaScript (Vanilla)
-- **APIs**: ipapi.co, VirusTotal API v3, AbuseIPDB API v2
+- **APIs**: ip-api.com (geolocation, no API key), VirusTotal API v3, AbuseIPDB API v2
 
 ### Quick Start
 
