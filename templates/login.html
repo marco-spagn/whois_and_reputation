@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - IP Lookup & Reputation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .login-container {
+            background: #2a2a3e;
+            border-radius: 10px;
+            padding: 40px;
+            max-width: 400px;
+            width: 100%;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+        h1 {
+            color: #fff;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2em;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            color: #ccc;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #444;
+            border-radius: 5px;
+            background: #1a1a2e;
+            color: #fff;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        input[type="password"]:focus {
+            outline: none;
+            border-color: #4a9eff;
+        }
+        button {
+            padding: 12px 30px;
+            background: #4a9eff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+            width: 100%;
+        }
+        button:hover {
+            background: #3a8eef;
+        }
+        .error {
+            color: #ff6b6b;
+            background: #3a1a1a;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1>🔒 Login</h1>
+        {{if .Error}}
+        <div class="error">{{.Error}}</div>
+        {{end}}
+        <form method="POST" action="/login">
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input 
+                    type="password" 
+                    id="password" 
+                    name="password" 
+                    placeholder="Enter password"
+                    required
+                    autofocus
+                >
+            </div>
+            <button type="submit">Login</button>
+        </form>
+    </div>
+</body>
+</html>
+
