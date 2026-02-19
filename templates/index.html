@@ -108,6 +108,15 @@
         .output.active {
             display: block;
         }
+        .output-section {
+            margin-bottom: 20px;
+        }
+        .output-section h3 {
+            color: #4a9eff;
+            font-size: 1rem;
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
         .output-content {
             background: #1a1a2e;
             border: 2px solid #444;
@@ -175,8 +184,16 @@
         <div class="error" id="error"></div>
 
         <div class="output" id="output">
-            <div class="output-content" id="outputContent"></div>
-            <button class="copy-btn" id="copyBtn" onclick="copyToClipboard()">📋 Copia</button>
+            <div class="output-section">
+                <h3>Standard (WHOIS & Reputation)</h3>
+                <div class="output-content" id="outputStandard"></div>
+                <button class="copy-btn" id="copyBtnStandard" onclick="copyToClipboard('outputStandard', 'copyBtnStandard')">📋 Copia</button>
+            </div>
+            <div class="output-section">
+                <h3>Extended (with Threat Intelligence)</h3>
+                <div class="output-content" id="outputExtended"></div>
+                <button class="copy-btn" id="copyBtnExtended" onclick="copyToClipboard('outputExtended', 'copyBtnExtended')">📋 Copia</button>
+            </div>
         </div>
     </div>
 
@@ -186,9 +203,9 @@
         const searchBtn = document.getElementById('searchBtn');
         const spinner = document.getElementById('spinner');
         const output = document.getElementById('output');
-        const outputContent = document.getElementById('outputContent');
+        const outputStandard = document.getElementById('outputStandard');
+        const outputExtended = document.getElementById('outputExtended');
         const errorDiv = document.getElementById('error');
-        const copyBtn = document.getElementById('copyBtn');
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -199,22 +216,27 @@
                 return;
             }
 
-            // Nascondi output ed errori precedenti
             output.classList.remove('active');
             errorDiv.classList.remove('active');
-            
-            // Mostra spinner e disabilita pulsante
             spinner.classList.add('active');
             searchBtn.disabled = true;
 
             try {
-                const response = await fetch(`/lookup?ip=${encodeURIComponent(ip)}`);
-                const text = await response.text();
+                const response = await fetch(`/lookup?ip=${encodeURIComponent(ip)}&format=json`);
+                const contentType = response.headers.get('content-type') || '';
 
                 if (!response.ok) {
+                    const text = await response.text();
                     showError(text || 'Errore nella richiesta');
+                    return;
+                }
+
+                if (contentType.includes('application/json')) {
+                    const data = await response.json();
+                    showOutput(data.standard, data.extended);
                 } else {
-                    showOutput(text);
+                    const text = await response.text();
+                    showOutput(text, text);
                 }
             } catch (error) {
                 showError(`Errore di connessione: ${error.message}`);
@@ -224,11 +246,11 @@
             }
         });
 
-        function showOutput(text) {
-            outputContent.textContent = text;
+        function showOutput(standard, extended) {
+            outputStandard.textContent = standard;
+            outputExtended.textContent = extended;
             output.classList.add('active');
             errorDiv.classList.remove('active');
-            // Scrolla fino all'output
             output.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
@@ -238,29 +260,28 @@
             output.classList.remove('active');
         }
 
-        function copyToClipboard() {
-            const text = outputContent.textContent;
+        function copyToClipboard(contentId, btnId) {
+            const contentEl = document.getElementById(contentId);
+            const btnEl = document.getElementById(btnId);
+            const text = contentEl.textContent;
             
-            // Usa la Clipboard API se disponibile
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(text).then(() => {
-                    copyBtn.textContent = '✅ Copiato!';
-                    copyBtn.classList.add('copied');
+                    btnEl.textContent = '✅ Copiato!';
+                    btnEl.classList.add('copied');
                     setTimeout(() => {
-                        copyBtn.textContent = '📋 Copia';
-                        copyBtn.classList.remove('copied');
+                        btnEl.textContent = '📋 Copia';
+                        btnEl.classList.remove('copied');
                     }, 2000);
                 }).catch(err => {
-                    console.error('Errore nella copia:', err);
-                    fallbackCopy(text);
+                    fallbackCopy(text, btnEl);
                 });
             } else {
-                fallbackCopy(text);
+                fallbackCopy(text, btnEl);
             }
         }
 
-        function fallbackCopy(text) {
-            // Metodo alternativo per browser più vecchi
+        function fallbackCopy(text, btnEl) {
             const textarea = document.createElement('textarea');
             textarea.value = text;
             textarea.style.position = 'fixed';
@@ -269,14 +290,13 @@
             textarea.select();
             try {
                 document.execCommand('copy');
-                copyBtn.textContent = '✅ Copiato!';
-                copyBtn.classList.add('copied');
+                btnEl.textContent = '✅ Copiato!';
+                btnEl.classList.add('copied');
                 setTimeout(() => {
-                    copyBtn.textContent = '📋 Copia';
-                    copyBtn.classList.remove('copied');
+                    btnEl.textContent = '📋 Copia';
+                    btnEl.classList.remove('copied');
                 }, 2000);
             } catch (err) {
-                console.error('Errore nella copia:', err);
                 alert('Errore nella copia. Seleziona il testo manualmente.');
             }
             document.body.removeChild(textarea);

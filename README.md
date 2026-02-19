@@ -57,7 +57,8 @@ export SITE_PASSWORD="your_site_password"
 
 **Note**: 
 - API keys are optional. If not configured, the service will still work but without reputation data from VirusTotal and AbuseIPDB.
-- **SITE_PASSWORD**: Optional. If set, the site will be protected with password authentication. If not set, the site will be publicly accessible.
+   - **SITE_PASSWORD**: Optional. If set, the site will be protected with password authentication.
+   - **IPLOCATE_API_KEY**: Optional. Enables Threat Intelligence (Proxy/VPN/TOR detection, abuse flags) via [IPLocate.io](https://www.iplocate.io/). Free tier: 1000 req/day.
 - System environment variables always take priority over the `.env` file.
 - The `.env` file is already included in `.gitignore`, so it won't be committed to the repository.
 

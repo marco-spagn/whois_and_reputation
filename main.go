@@ -38,7 +38,22 @@ type IPLookupResult struct {
 		AbuseConfidence int    `json:"abuse_confidence"`
 		Status          string `json:"status,omitempty"` // "ok", "error", "no_key"
 	} `json:"abuseipdb"`
+	ThreatIntel struct {
+		IsProxy    bool   `json:"is_proxy"`
+		IsVPN      bool   `json:"is_vpn"`
+		IsTor      bool   `json:"is_tor"`
+		IsAbuser   bool   `json:"is_abuser"`
+		IsAnonymous bool  `json:"is_anonymous"`
+		NetworkType string `json:"network_type,omitempty"`
+		Status     string `json:"status,omitempty"` // "ok", "error", "no_key"
+	} `json:"threat_intel"`
 	Error string `json:"error,omitempty"`
+}
+
+// LookupResponse con standard e extended per l'API JSON
+type LookupResponse struct {
+	Standard string `json:"standard"`
+	Extended string `json:"extended"`
 }
 
 // CacheEntry contiene un risultato con timestamp per invalidazione
@@ -488,6 +503,75 @@ func fetchAbuseIPDB(ip, apiKey string, result *IPLookupResult) {
 	log.Printf("AbuseIPDB: successo, confidence: %d%%", result.AbuseIPDB.AbuseConfidence)
 }
 
+// fetchIPLocate interroga IPLocate.io per threat intelligence (Proxy/VPN/TOR, abuse flags)
+// API: https://www.iplocate.io/ - Free 1000 req/day
+func fetchIPLocate(ip, apiKey string, result *IPLookupResult) {
+	if apiKey == "" {
+		result.ThreatIntel.Status = "no_key"
+		return
+	}
+
+	apiURL := fmt.Sprintf("https://iplocate.io/api/lookup/%s?apikey=%s", ip, apiKey)
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		result.ThreatIntel.Status = "error"
+		return
+	}
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("IPLocate: errore HTTP: %v", err)
+		result.ThreatIntel.Status = "error"
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("IPLocate: status %d", resp.StatusCode)
+		result.ThreatIntel.Status = "error"
+		return
+	}
+
+	var data struct {
+		Privacy struct {
+			IsProxy     bool `json:"is_proxy"`
+			IsVPN       bool `json:"is_vpn"`
+			IsTor       bool `json:"is_tor"`
+			IsAbuser    bool `json:"is_abuser"`
+			IsAnonymous bool `json:"is_anonymous"`
+			IsHosting   bool `json:"is_hosting"`
+		} `json:"privacy"`
+		ASN struct {
+			Type string `json:"type"`
+		} `json:"asn"`
+		Company struct {
+			Type string `json:"type"`
+		} `json:"company"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		log.Printf("IPLocate: errore parsing: %v", err)
+		result.ThreatIntel.Status = "error"
+		return
+	}
+
+	result.ThreatIntel.IsProxy = data.Privacy.IsProxy
+	result.ThreatIntel.IsVPN = data.Privacy.IsVPN
+	result.ThreatIntel.IsTor = data.Privacy.IsTor
+	result.ThreatIntel.IsAbuser = data.Privacy.IsAbuser
+	result.ThreatIntel.IsAnonymous = data.Privacy.IsAnonymous
+
+	if data.ASN.Type != "" {
+		result.ThreatIntel.NetworkType = data.ASN.Type
+	} else if data.Company.Type != "" {
+		result.ThreatIntel.NetworkType = data.Company.Type
+	}
+
+	result.ThreatIntel.Status = "ok"
+}
+
 // loadEnvFile carica le variabili d'ambiente da un file .env
 // Usa solo la standard library, senza dipendenze esterne
 func loadEnvFile(filename string) error {
@@ -552,6 +636,7 @@ func lookupIP(ip string) IPLookupResult {
 	// Leggi le API keys dalle variabili d'ambiente (caricate da .env se presente)
 	vtKey := os.Getenv("VT_API_KEY")
 	abuseKey := os.Getenv("ABUSE_API_KEY")
+	iplocateKey := os.Getenv("IPLOCATE_API_KEY")
 
 	result := IPLookupResult{IP: ip}
 
@@ -569,6 +654,9 @@ func lookupIP(ip string) IPLookupResult {
 
 	// Fetch dati da AbuseIPDB (in background, non blocca)
 	fetchAbuseIPDB(ip, abuseKey, &result)
+
+	// Fetch threat intelligence da IPLocate.io (Proxy/VPN/TOR, abuse flags)
+	fetchIPLocate(ip, iplocateKey, &result)
 
 	// Salva in cache
 	cacheMutex.Lock()
@@ -651,6 +739,60 @@ func formatOutput(result IPLookupResult) string {
 	return output.String()
 }
 
+// formatOutputExtended come formatOutput ma con sezione THREAT INTELLIGENCE aggiuntiva
+func formatOutputExtended(result IPLookupResult) string {
+	base := formatOutput(result)
+
+	// Rimuovi gli ultimi \n\n dal base e aggiungi la sezione threat
+	base = strings.TrimSuffix(base, "\n\n")
+
+	var ext strings.Builder
+	ext.WriteString(base)
+	ext.WriteString("\n\n")
+	ext.WriteString("THREAT INTELLIGENCE:\n\n")
+
+	if result.ThreatIntel.Status == "ok" {
+		// Proxy/VPN/TOR detection
+		var anonymity []string
+		if result.ThreatIntel.IsProxy {
+			anonymity = append(anonymity, "Proxy")
+		}
+		if result.ThreatIntel.IsVPN {
+			anonymity = append(anonymity, "VPN")
+		}
+		if result.ThreatIntel.IsTor {
+			anonymity = append(anonymity, "Tor")
+		}
+		if result.ThreatIntel.IsAnonymous && len(anonymity) == 0 {
+			anonymity = append(anonymity, "Anonymous")
+		}
+		if len(anonymity) > 0 {
+			ext.WriteString(fmt.Sprintf("Anonymity: %s\n", strings.Join(anonymity, ", ")))
+		} else {
+			ext.WriteString("Anonymity: None detected\n")
+		}
+
+		// Abuse flags
+		if result.ThreatIntel.IsAbuser {
+			ext.WriteString("Abuse Flag: Reported abuser/spammer\n")
+		} else {
+			ext.WriteString("Abuse Flag: None\n")
+		}
+
+		// Network type
+		if result.ThreatIntel.NetworkType != "" {
+			ext.WriteString(fmt.Sprintf("Network Type: %s\n", result.ThreatIntel.NetworkType))
+		}
+	} else if result.ThreatIntel.Status == "no_key" {
+		ext.WriteString("IPLocate API key not configured\n")
+	} else {
+		ext.WriteString("Error retrieving threat data\n")
+	}
+
+	ext.WriteString("\n\n")
+	return ext.String()
+}
+
 // getCountryFlagEmoji restituisce l'emoji della bandiera basata sul country code
 func getCountryFlagEmoji(countryCode string) string {
 	flags := map[string]string{
@@ -691,9 +833,7 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 
 // handleLookup gestisce la richiesta GET /lookup?ip=...
 func handleLookup(w http.ResponseWriter, r *http.Request) {
-	// Abilita CORS per sviluppo
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
 	ip := r.URL.Query().Get("ip")
 	if ip == "" {
@@ -701,19 +841,30 @@ func handleLookup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Valida l'IP
 	if !validateIP(ip) {
 		http.Error(w, "Indirizzo IP non valido", http.StatusBadRequest)
 		return
 	}
 
-	// Esegui la lookup
 	result := lookupIP(ip)
+	format := r.URL.Query().Get("format")
 
-	// Formatta e restituisci il risultato come testo semplice
-	output := formatOutput(result)
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(output))
+	if format == "json" {
+		// Restituisce JSON con entrambi i formati per la UI
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		resp := LookupResponse{
+			Standard: formatOutput(result),
+			Extended: formatOutputExtended(result),
+		}
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(resp)
+	} else {
+		// Formato testo standard (backward compatibility)
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		output := formatOutput(result)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(output))
+	}
 }
 
 func main() {
