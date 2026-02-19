@@ -39,13 +39,13 @@ type IPLookupResult struct {
 		Status          string `json:"status,omitempty"` // "ok", "error", "no_key"
 	} `json:"abuseipdb"`
 	ThreatIntel struct {
-		IsProxy    bool   `json:"is_proxy"`
-		IsVPN      bool   `json:"is_vpn"`
-		IsTor      bool   `json:"is_tor"`
-		IsAbuser   bool   `json:"is_abuser"`
-		IsAnonymous bool  `json:"is_anonymous"`
+		IsProxy     bool   `json:"is_proxy"`
+		IsVPN       bool   `json:"is_vpn"`
+		IsTor       bool   `json:"is_tor"`
+		IsAbuser    bool   `json:"is_abuser"`
+		IsAnonymous bool   `json:"is_anonymous"`
 		NetworkType string `json:"network_type,omitempty"`
-		Status     string `json:"status,omitempty"` // "ok", "error", "no_key"
+		Status      string `json:"status,omitempty"` // "ok", "error", "no_key"
 	} `json:"threat_intel"`
 	Error string `json:"error,omitempty"`
 }
@@ -67,7 +67,7 @@ var (
 	cache      = make(map[string]CacheEntry)
 	cacheMutex sync.RWMutex
 	cacheTTL   = 30 * time.Minute // Time-to-live della cache
-	
+
 	// Sessioni autenticate (in produzione usa una soluzione più robusta)
 	authenticatedSessions = make(map[string]time.Time)
 	sessionMutex          sync.RWMutex
@@ -76,7 +76,7 @@ var (
 )
 
 const (
-	sessionCookieName = "ip_lookup_session"
+	sessionCookieName  = "ip_lookup_session"
 	sessionTokenLength = 32
 )
 
@@ -98,12 +98,12 @@ func generateSessionToken() (string, error) {
 func isValidSession(token string) bool {
 	sessionMutex.RLock()
 	defer sessionMutex.RUnlock()
-	
+
 	expires, exists := authenticatedSessions[token]
 	if !exists {
 		return false
 	}
-	
+
 	// Rimuovi sessioni scadute
 	if time.Now().After(expires) {
 		sessionMutex.RUnlock()
@@ -113,7 +113,7 @@ func isValidSession(token string) bool {
 		sessionMutex.RLock()
 		return false
 	}
-	
+
 	return true
 }
 
@@ -123,11 +123,11 @@ func createSession() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	sessionMutex.Lock()
 	authenticatedSessions[token] = time.Now().Add(sessionTTL)
 	sessionMutex.Unlock()
-	
+
 	return token, nil
 }
 
@@ -144,12 +144,12 @@ func isAuthenticated(r *http.Request) bool {
 	if sitePassword == "" {
 		return true
 	}
-	
+
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil {
 		return false
 	}
-	
+
 	return isValidSession(cookie.Value)
 }
 
@@ -161,7 +161,7 @@ func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			next(w, r)
 			return
 		}
-		
+
 		if !isAuthenticated(r) {
 			// Reindirizza al login per richieste GET alla root
 			if r.URL.Path == "/" && r.Method == "GET" {
@@ -172,7 +172,7 @@ func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-		
+
 		next(w, r)
 	}
 }
@@ -184,7 +184,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-	
+
 	if r.Method == "GET" {
 		// Mostra il form di login
 		tmpl, err := template.ParseFiles("templates/login.html")
@@ -196,11 +196,11 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		tmpl.Execute(w, nil)
 		return
 	}
-	
+
 	if r.Method == "POST" {
 		// Processa il login
 		password := r.FormValue("password")
-		
+
 		// Usa constant-time comparison per sicurezza
 		if subtle.ConstantTimeCompare([]byte(password), []byte(sitePassword)) == 1 {
 			// Password corretta, crea sessione
@@ -209,7 +209,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "Error creating session", http.StatusInternalServerError)
 				return
 			}
-			
+
 			// Imposta il cookie
 			cookie := http.Cookie{
 				Name:     sessionCookieName,
@@ -221,12 +221,12 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 				Secure:   false, // Imposta a true se usi HTTPS
 			}
 			http.SetCookie(w, &cookie)
-			
+
 			// Reindirizza alla home
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
-		
+
 		// Password errata
 		tmpl, err := template.ParseFiles("templates/login.html")
 		if err != nil {
@@ -237,7 +237,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		tmpl.Execute(w, map[string]string{"Error": "Invalid password"})
 		return
 	}
-	
+
 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }
 
@@ -247,7 +247,7 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		clearSession(cookie.Value)
 	}
-	
+
 	// Rimuovi il cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
@@ -256,7 +256,7 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 		HttpOnly: true,
 	})
-	
+
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
@@ -279,19 +279,19 @@ func fetchIPAPI(ip string) (IPLookupResult, error) {
 	}
 
 	var data struct {
-		Status     string `json:"status"`
-		Message    string `json:"message"`
-		Country    string `json:"country"`
+		Status      string `json:"status"`
+		Message     string `json:"message"`
+		Country     string `json:"country"`
 		CountryCode string `json:"countryCode"`
-		Region     string `json:"region"`
-		RegionName string `json:"regionName"`
-		City       string `json:"city"`
-		ISP        string `json:"isp"`
-		Org        string `json:"org"`
-		AS         string `json:"as"`
-		Mobile     bool   `json:"mobile"`
-		Proxy      bool   `json:"proxy"`
-		Hosting    bool   `json:"hosting"`
+		Region      string `json:"region"`
+		RegionName  string `json:"regionName"`
+		City        string `json:"city"`
+		ISP         string `json:"isp"`
+		Org         string `json:"org"`
+		AS          string `json:"as"`
+		Mobile      bool   `json:"mobile"`
+		Proxy       bool   `json:"proxy"`
+		Hosting     bool   `json:"hosting"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
@@ -414,7 +414,7 @@ func fetchAbuseIPDB(ip, apiKey string, result *IPLookupResult) {
 	q.Add("ipAddress", ip)
 	q.Add("maxAgeInDays", "90")
 	req.URL.RawQuery = q.Encode()
-	
+
 	// Log dell'URL finale per debug
 	log.Printf("AbuseIPDB: richiesta a %s", req.URL.String())
 
@@ -569,7 +569,49 @@ func fetchIPLocate(ip, apiKey string, result *IPLookupResult) {
 		result.ThreatIntel.NetworkType = data.Company.Type
 	}
 
+	// Integrazione Tor Project DNSEL: verifica supplementare se IPLocate non ha rilevato Tor
+	// L'elenco ufficiale Tor è più aggiornato e completo
+	if !result.ThreatIntel.IsTor && isTorExitNode(ip) {
+		result.ThreatIntel.IsTor = true
+		log.Printf("IPLocate: IP %s confermato come Tor exit node da Tor Project DNSEL", ip)
+	}
+
 	result.ThreatIntel.Status = "ok"
+}
+
+// isTorExitNode verifica se l'IP è un Tor exit node usando il servizio DNSEL ufficiale del Tor Project
+// https://support.torproject.org/relay-operators/operating-a-tor-exit-node/
+// Formato: [reversed-ip].dnsel.torproject.org -> 127.0.0.2 se è exit node
+func isTorExitNode(ip string) bool {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+
+	// Reversa l'IP per la query DNS (es: 185.220.101.169 -> 169.101.220.185)
+	var reversed string
+	if ip4 := parsed.To4(); ip4 != nil {
+		reversed = fmt.Sprintf("%d.%d.%d.%d", ip4[3], ip4[2], ip4[1], ip4[0])
+	} else if ip6 := parsed.To16(); ip6 != nil {
+		// Per IPv6: reverse nibbles (semplificato - il DNSEL Tor potrebbe non supportare IPv6)
+		return false
+	} else {
+		return false
+	}
+
+	host := fmt.Sprintf("%s.dnsel.torproject.org", reversed)
+	addrs, err := net.LookupHost(host)
+	if err != nil {
+		return false
+	}
+
+	// Se restituisce 127.0.0.2 (o altri 127.x.x.x) è un Tor exit node
+	for _, addr := range addrs {
+		if strings.HasPrefix(addr, "127.") && addr != "127.0.0.1" {
+			return true
+		}
+	}
+	return false
 }
 
 // loadEnvFile carica le variabili d'ambiente da un file .env
@@ -664,7 +706,7 @@ func lookupIP(ip string) IPLookupResult {
 	vtKey := os.Getenv("VT_API_KEY")
 	abuseKey := os.Getenv("ABUSE_API_KEY")
 	iplocateKey := os.Getenv("IPLOCATE_API_KEY")
-	
+
 	// Debug: verifica se IPLOCATE_API_KEY è caricata
 	if iplocateKey == "" {
 		log.Printf("IPLOCATE_API_KEY non trovata nelle variabili d'ambiente")
@@ -706,13 +748,12 @@ func lookupIP(ip string) IPLookupResult {
 // formatOutput formatta il risultato come testo semplice per copia-incolla
 func formatOutput(result IPLookupResult) string {
 	var output strings.Builder
-	
-	output.WriteString("\n\n")
+
 	output.WriteString("WHOIS & REPUTATION:\n\n")
 	output.WriteString("\n")
 	output.WriteString(fmt.Sprintf("IP: %s\n\n", result.IP))
 	output.WriteString("WHOIS\n\n")
-	
+
 	if result.ISP != "" {
 		output.WriteString(fmt.Sprintf("ISP %s\n", result.ISP))
 	}
@@ -746,10 +787,10 @@ func formatOutput(result IPLookupResult) string {
 		}
 		output.WriteString(fmt.Sprintf("City %s\n", cityStr))
 	}
-	
+
 	output.WriteString("\n")
 	output.WriteString("REPUTATION:\n\n")
-	
+
 	// VirusTotal (formato: Virutotal: 0/92)
 	if result.VirusTotal.Status == "ok" {
 		output.WriteString(fmt.Sprintf("Virutotal: %d/%d\n", result.VirusTotal.Malicious, result.VirusTotal.Total))
@@ -758,7 +799,7 @@ func formatOutput(result IPLookupResult) string {
 	} else {
 		output.WriteString("Virutotal: Errore nel recupero dati\n")
 	}
-	
+
 	// AbuseIPDB (formato: Abuseipdb:1% - senza spazio dopo i due punti)
 	if result.AbuseIPDB.Status == "ok" {
 		output.WriteString(fmt.Sprintf("Abuseipdb:%d%%\n", result.AbuseIPDB.AbuseConfidence))
@@ -767,9 +808,9 @@ func formatOutput(result IPLookupResult) string {
 	} else {
 		output.WriteString("Abuseipdb: Errore nel recupero dati\n")
 	}
-	
+
 	output.WriteString("\n\n")
-	
+
 	return output.String()
 }
 
@@ -786,7 +827,14 @@ func formatOutputExtended(result IPLookupResult) string {
 	ext.WriteString("THREAT INTELLIGENCE:\n\n")
 
 	if result.ThreatIntel.Status == "ok" {
-		// Proxy/VPN/TOR detection
+		// Campo dedicato Tor (per maggiore chiarezza)
+		if result.ThreatIntel.IsTor {
+			ext.WriteString("Tor: Yes (Exit node detected)\n")
+		} else {
+			ext.WriteString("Tor: No\n")
+		}
+
+		// Proxy/VPN/Anonymity detection
 		var anonymity []string
 		if result.ThreatIntel.IsProxy {
 			anonymity = append(anonymity, "Proxy")
@@ -931,9 +979,9 @@ func main() {
 	// Login e logout non protetti
 	http.HandleFunc("/login", handleLogin)
 	http.HandleFunc("/logout", handleLogout)
-	
+
 	// Route protette
-	http.HandleFunc("/", requireAuth(handleIndex))      // Pagina HTML con form
+	http.HandleFunc("/", requireAuth(handleIndex))        // Pagina HTML con form
 	http.HandleFunc("/lookup", requireAuth(handleLookup)) // Endpoint API per la lookup
 
 	// Avvia goroutine per pulire sessioni scadute
