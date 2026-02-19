@@ -11,4 +11,6 @@ services:
         sync: false
       - key: ABUSE_API_KEY
         sync: false
+      - key: SITE_PASSWORD
+        sync: false
 
